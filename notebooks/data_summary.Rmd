@@ -1,0 +1,287 @@
+---
+title: "Data Notes"
+output: html_notebook
+---
+Answering the question, "just what's in this set, exactly?"
+
+```{r echo=FALSE, warnings=FALSE}
+library(dplyr)
+library(ggplot2)
+library(png)
+library(forcats)
+library(RSpectra)
+library(stringr)
+set.seed(100)
+```
+
+```{r data_in}
+manifest <- read.delim("E:\\Leaf_PCA_data\\leafsnap-dataset-images.txt", header = TRUE)
+```
+
+```{r basic_summary}
+# Count how many images do and don't have "segmented" in their path.
+columns_names <- manifest %>%
+  colnames()
+
+number_rows <- manifest %>%
+  nrow()
+
+columns_names
+number_rows
+```
+What's the most common size of image?
+
+```{r sample_image_dimensions}
+sample_photo_paths <- sample(manifest$segmented_path, 200)
+dimensions = c()
+
+for (photo in photo_sample_paths) {
+  path = file.path("E:/Leaf_PCA_data", photo)
+  d <- dim(readPNG(path))
+  dimensions = c(label, paste(d, collapse = " ")) 
+}
+```
+
+```{r plot_sample_image_dimensions, warning=FALSE}
+tibble(label = dimensions) %>%
+  count(label) %>%
+  mutate(label = fct_reorder(label, n, .desc = TRUE)) %>%
+  top_n(10) %>%
+  ggplot(aes(x = n, y = label)) +
+  scale_x_log10() +
+  xlab("Occurences") +
+  ylab("Dimensions") +
+  geom_col()
+```
+Ok, fine, maybe there's a folder of only this size.
+Let's append the dimensions of each segmented photo to the overall data frame, and use that to pick out some common dimension to test with. 
+
+```{r fix_manifest}
+
+x_dim <- c()
+y_dim <- c()
+for (photo in manifest$segmented_path[]) {
+  path = file.path("E:/Leaf_PCA_data", photo)
+  d <- dim(readPNG(path))
+  x_dim <- c(x_dim, d[[1]])
+  y_dim <- c(y_dim, d[[2]])
+}
+
+pair <- cbind(x_dim, y_dim)
+fixed_manifest <- cbind(manifest, pair)
+saveRDS(fixed_manifest, file = "../data/updated_leafsnap-dataset-images.Rds")
+```
+
+Cool, lets check the dimensions of this thing. Exactly what here needs to be fixed before the final analysis?
+
+First off, how many images are there that are all the same size?
+
+```{r dimensional_analysis}
+manifest_new <- readRDS("../data/updated_leafsnap-dataset-images.Rds")
+manifest_new %>% 
+  mutate(label = paste(x_dim, y_dim, sep = " ")) %>%
+  group_by(label) %>%
+  summarize(n = n()) %>%
+  top_n(10) %>%
+  mutate(label = fct_reorder(label, n, .desc = TRUE)) %>%
+  ggplot(aes(x = label, y = n)) +
+  geom_col()
+
+```
+
+Ok, very cool. We've got about 5000 photos that we won't have to resize just yet. Lets work with those.
+
+```{r}
+test_set <- manifest_new %>%
+  filter(x_dim == 525, y_dim == 700) %>%
+  mutate(path_full = file.path("E:/Leaf_PCA_data", segmented_path)) %>%
+  select(path_full) %>%
+  as.vector()
+
+saveRDS(test_set, "../data/test_set.Rds")
+```
+
+How on earth can I extract the pixel data that I'm looking for?
+Trying to get a greyscale value for each pixel that's between 0 and 1.
+Let's convert the pixel matrix to a vector by row. 
+Also make sure that each row is appended to themselves in the correct way.
+
+```{r}
+# List-ify the tranposed matrix.
+example_photo_path <- readRDS("../data/test_set.Rds")[[1]]
+photo_raw <- readPNG(example_photo_path)
+pixel_vector <- c(t(photo_raw))
+
+row_is_correct <- c()
+for (n in 0:(500-1)) {
+  correct <- all(photo_raw[n,] == pixel_vector[(700*(n-1)+1):(700*n)])
+  row_is_correct <- c(correct, row_is_correct)
+}
+all(row_correct_log)
+```
+Ok, the pixel thing works. Wait, do all of my images have 1 channel that's either 1 or 0?
+
+```{r test_channels}
+photo_paths <- readRDS("../data/test_set.Rds")
+sample_photo_paths <- sample(photo_paths$path_full, 200)
+time_in <- Sys.time()
+
+all_photos_correct <- c()
+for (photo in sample_photo_paths) {
+  photo_data <- readPNG(photo)
+  pixel_vector <- c(t(photo_data))
+  correct <- (pixel_vector == 0) | (pixel_vector == 1)
+  all_photos_correct <- c(all_photos_correct, correct)
+}
+all(all_photos_correct)
+Sys.time() - time_in
+```
+
+Cool, now we've got photos of the same size and color type.
+
+```{r assemble_matrix}
+data_mat <- matrix(nrow = 200, ncol = 525*700)
+for (i in 1:length(sample_photo_paths)) {
+  photo_data <- readPNG(sample_photo_paths[[i]])
+  data_mat[i,] <- c(t(photo_data))
+}
+```
+
+Calculate the covariance matrix.
+
+```{r calculate_covariance_matrix}
+mat_1 <- matrix(data=1,nrow=200,ncol=200)
+x_mat <- data_mat - ((mat_1 %*% data_mat) * (1 / 200))
+covar_mat <- (x_mat %*% t(x_mat)) * (1/200)
+```
+
+
+```{r get_eigenvalues}
+eig_object <- eigs_sym(covar_mat, k=3, which = "LM")
+eig_object
+```
+
+Anything to analyze in these vectors? Can we represent them as images?
+
+```{r analyze_vectors}
+round(eig_object$vectors)
+```
+
+Nope, just not a whole lot of data that was extracted.
+Now, how can I center each of these images for further processing???
+
+WAIT, FORGOT TO CENTER THE IMAGES BEFORE CALCULATING STUFF
+
+You know what? Let's try something in C++ to re-border all off the images in a black frame.
+First off, we need to know the maximum sizes that we're dealing with.
+Two choices, either resize all of these, or just add a black boarder.
+I'm leading towards the latter, because I don't want to distort my data more than I have to.
+
+```{r image_size_problem_scope}
+
+manifest_new <- readRDS("../data/updated_leafsnap-dataset-images.Rds")
+manifest_new %>% 
+  summarize(x_MAX = max(x_dim), x_MIN = min(x_dim), y_MAX = max(y_dim), y_MIN = min(y_dim))
+```
+Wait, are all of these photo even PNGs?
+Answer: The segmented ones are, but the lab photos are not. Make a note of that for later conversions.
+
+```{r}
+manifest <- read.delim("E:\\Leaf_PCA_data\\leafsnap-dataset-images.txt", header = TRUE)
+manifest %>%
+  mutate(is_PNG = str_detect(segmented_path, ".png|.PNG")) %>%
+  count(is_PNG)
+```
+
+Next question, how am I going to walk this directory, converting all the images as I go?
+Answer: Separate R script.
+Ok, done. Let's assemble a better matrix
+Let's do a test on part of our photo set. There's a lot of photos.
+We should have an answer to "How many seconds per photos?" and "Does this number increase
+as the matrix gets larger?"
+
+```{r assemble_BETTER_matrix}
+folders <- list.dirs("E:\\Leaf_PCA_data\\2021-12-04_segmented_RESIZED")[-1][1:2]
+
+# Initialize data collection vector.
+timing_vec <- c()
+# 324 photos to add to matrix
+data_mat <- matrix(nrow = 324, ncol = 700*700)
+for (dir in folders) {
+  files <- list.files(dir, full.names = TRUE)
+  
+  for (i in 1:length(files)) {
+    time_in <- Sys.time()
+    
+    photo_data <- readPNG(files[[i]])
+    data_mat[i,] <- c(t(photo_data))
+    
+    diff <- difftime(Sys.time(), time_in, units = "secs")
+    timing_vec <- c(timing_vec, diff)
+  }
+}
+data_mat[1:10,1:10]
+```
+
+```{r}
+avg_sec <- mean(timing_vec)
+tibble(number = 1:length(timing_vec), seconds = timing_vec) %>%
+  ggplot(aes(x = number, y = seconds * 1000)) +
+  scale_y_log10() +
+  geom_col()
+```
+
+Ok, got average time to add an image row. Also, doesn't look like it increases with the size of the matrix. Just how long is this thing going to take?
+```{r}
+num_files <- list.files("E:\\Leaf_PCA_data\\2021-12-04_segmented_RESIZED", recursive = TRUE) %>% length()
+(num_files*avg_sec)/60
+```
+Seven minutes, not too bad. Pretty straightforward to add everything to the matrix for the almost-final PCA. Let's see how this goes!
+
+```{r build_mat}
+path <- "E:\\Leaf_PCA_data\\2021-12-04_segmented_RESIZED"
+files <- list.files(path, all.files = TRUE, recursive = TRUE, full.names = TRUE)
+sample_files = sample(files, size = 400)
+n_rows <- length(sample_files)
+n_rows
+
+data_mat_final <- matrix(nrow = n_rows, ncol = 700*700)
+
+for (i in 1:length(sample_files)) {
+  photo_data <- readPNG(files[[i]])
+  data_mat_final[i,] <- c(t(photo_data))
+}
+data_mat_final[1:10,1:10]
+saveRDS(data_mat_final, 
+        file="..\\data\\2021-12-10_segmented_picture_mat.Rds")
+```
+
+Ok, we've go a larger and more varied sample now, lets see what we can get.
+
+```{r}
+mat_1 <- matrix(data=1,nrow=700*700,ncol=700*700) 
+x_mat <- data_mat_final - ((mat_1 %*% data_mat_final) * (1 / (700*700)))
+covar_mat <- (x_mat %*% t(x_mat)) * (1/(700*700))
+eig_object <- eigs_sym(covar_mat, k=1, which = "LM")
+eig_object
+```
+
+Ok, looks like we've made some improper assumptions. Mainly, that we won't have to do any downsampling. Huh.
+
+1. Look into ways to represent the data more efficiently (Matrix package)
+2. Carefully choose the method of down-sampling your photos, as to keep them centers the best you can, and to generalize to new photos in the future.
+3. Design your cleaning script to NOT throw away all the useful information contained in the manifest. Why on earth are you using read.files so much?
+
+# 2021-12-10
+
+Ok, there's basically 2 ways to go at this. Either decrease the amount of data that you're using, or represent it in a more efficient way.
+
+Let's try option 2 first.
+
+```{r test_of_propagate_package}
+install.packages("propagate")
+library(propagate)
+data_mat <- readRDS("..\\data\\2021-12-10_segmented_picture_mat.Rds")
+cor_mat <- bigcor(data_mat, fun = "cov")
+```
+

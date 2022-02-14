@@ -1,0 +1,91 @@
+---
+title: "PCA Writeup"
+author: "Carson Weaver"
+date: "1/22/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### NEW HEADER
+### INSERT GIF HERE:
+
+- Gif of PCA result, high-level summary
+
+### What's principal component analysis?
+
+Principal component analysis is a way of compressing information.
+When you're studying something, you usually are recording lots of redundant information.
+An example using in THIS paper uses a ball, recorded by cameras from several different angles.
+All of these cameras are capturing what's basically the same information, just from different points in space.
+However, if you don't know what you're looking at, it's really hard to know this at the time.
+If you're standing there, it's easy to say "Yeah, this bug isn't actually moving in 6 different directions. It's just crawling from one side of the table to the other and the cameras are getting that from 6 different angles."
+The problem is that there's actually [many](link), [many](link), [many](link) times when it's hard to do this in reality.
+Principal Component Analysis, usually abbreviated PCA, is a way of extracting only the most important part of your data, usually making it smaller and much easier to draw conclusions from.
+In the example with the ball, you'd only get the one direction.
+
+### Ok, but what is it _actually_?
+
+Let's dig into some of the math.
+PCA is described with linear algebra, meaning that it's a technique that involves vectors and matrices.
+Extracting the main direction that we're going to use then amounts to two steps.
+The first is wrapping our data up into a matrix.
+The next is calculating the covariance matrix from this matrix.
+Lastly, you extract the eigenvectors associated with the larges eigenvalues that you have.
+These eigenvectors are your principle components.
+
+In our ball example, we're representing each element of our dataset as a vector.
+
+### That's cool and all, but what do eigenvectors and the covariance matrix have to do with anything?
+??????
+	
+### Fine, what is this being applied to?
+We'll be working with the [LeafSnap](http://leafsnap.com/dataset/) dataset.
+It was assembled by researches at **SCHOOL** for **TYPE** research.
+Very helpfully, this dataset has 2 copies of every leaf image: segmmented and unsegmented.
+
+![](..\images\imagemagick_playground\start\test_png.png)
+![](..\images\imagemagick_playground\start\wizard.jpg)
+
+The key question here is that we're trying to represent each species as a linear combination of our principal components.
+Ok, it's just a matter of assembling everything into a covariance matrix.
+There are a few kinks to work out first.
+
+### Wait, what kinks?
+
+Second problem: not every image is the same.
+These images vary widely in size, we'll 
+
+I worked through each of these using the R language.
+The verbose cleaning script that I used is available on [here](github.com).
+
+The LeafSnap set is very well-put together.
+The pre-segmentation of most of the images helps a lot with processing.
+Even so, there's still a few issues to take care of first.
+
+First problem: there's a lot of data to work with.
+If you start assembling everything too fast, something like this might happen.
+
+There's just over 30,000 images in the LeafSnap set, only a fraction of which we actually care about using. 
+We're going to take a random sample of about 2000 of these, and use them to represent out stuff.
+
+### What did your first attempt look like?
+
+Ok, let's take our first crack at extracting our information.
+Putting together what we know about PCA now, this will consist of.
+
+- Stuff
+	- Tools
+	- Pseudocode
+- What's the final result?
+	- Description of the data
+	- Metrics describing accuracy
+
+- What did we learn about the dataset from this analysis?
+	- How good are we at classifying leaves?
+- Discussion
+	- Limitations
+
+## Citations
+Ball rolling paper introduction.
