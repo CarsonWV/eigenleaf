@@ -37,5 +37,6 @@ rsconnect/
 
 # C++ libraries
 data/
-images/
+raw_images/
 libraries/
+utils/process_photos.bat
