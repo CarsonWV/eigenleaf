@@ -86,9 +86,8 @@ Anything to analyze in these vectors? Can we represent them as images?
 
 ```{r analyze_vectors}
 for (i in 1:number) {
-  test <- eig_object$vectors[,i]
-  length(test)
-  mat <- (matrix(test, nrow = 50, ncol = 50) - mean(test)) / sd(test)
+  vec <- eig_object$vectors[,i]
+  mat <- (matrix(vec, nrow = 50, ncol = 50) - mean(vec)) / sd(vec)
   path <- paste0("../data/PC-", i, "-img.png")
   writePNG(mat, target = path)
 }
