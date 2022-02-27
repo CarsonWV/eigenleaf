@@ -1,0 +1,96 @@
+---
+title: "Data Processing"
+author: "Carson Weaver"
+date: "2/26/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Answering the question, "just what's in this set, exactly?"
+
+```{r setup, echo=FALSE, warnings=FALSE, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(png)
+library(forcats)
+library(RSpectra)
+library(stringr)
+library(Matrix)
+set.seed(100)
+dim_side <- 50
+```
+
+```{r data_in, echo = FALSE}
+manifest <- list.files(path = "../data/revision_2", full.names = TRUE)
+```
+
+What's the most common size of image?
+
+```{r sample_image_dimensions}
+output <- data.frame(x = c(), y = c())
+for (path in manifest) {
+  d <- dim(readPNG(path))
+  row <- data.frame(x = d[[1]], y = d[[2]])
+  output <- bind_rows(output, row)
+  #dimensions = c(dimensions, paste(d, collapse = " ")) 
+}
+plot(output)
+```
+How on earth can I extract the pixel data that I'm looking for?
+Trying to get a greyscale value for each pixel that's between 0 and 1.
+Let's convert the pixel matrix to a vector by row. 
+Also make sure that each row is appended to themselves in the correct way.
+
+Cool, now we've got photos of the same size and color type.
+
+```{r assemble_matrix}
+manifest <- list.files(path = "../data/revision_2", full.names = TRUE)
+data_mat <- matrix(nrow = length(manifest), ncol = dim_side^2)
+data_mat <- as(data_mat, "dgCMatrix")
+for (i in 1:length(manifest)) {
+  photo_data <- readPNG(manifest[[i]])
+  data_mat[i,] <- c(photo_data)
+  print(i)
+}
+name <- paste0("../data/", dim_side, "x", dim_side, "-photo_assembly-2022-02-27.RDS")
+saveRDS(data_mat, file = name)
+```
+
+Calculate the covariance matrix.
+
+```{r calculate_covariance_matrix}
+mat_1 <- data.frame(matrix(data = 1,nrow=length(manifest), ncol=length(manifest) - 1))
+mat_1 <- sparse.model.matrix(~ ., data = mat_1)
+dim(mat_1)
+```
+
+```{r}
+x_mat <- data_mat - ((mat_1 %*% data_mat) * (1 / dim_side))
+covar_mat <- (t(x_mat) %*% x_mat) * (1/dim_side)
+rm(x_mat)
+rm(photo_data)
+rm(data_mat)
+```
+
+
+```{r get_eigenvalues}
+number = 5
+eig_object <- eigs_sym(covar_mat, k = number, which = "LM")
+test <- eig_object$vectors[,1]
+```
+
+Anything to analyze in these vectors? Can we represent them as images?
+
+```{r analyze_vectors}
+for (i in 1:number) {
+  test <- eig_object$vectors[,i]
+  length(test)
+  mat <- (matrix(test, nrow = 50, ncol = 50) - mean(test)) / sd(test)
+  path <- paste0("../data/PC-", i, "-img.png")
+  writePNG(mat, target = path)
+}
+```
+
