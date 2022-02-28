@@ -15,79 +15,67 @@ Answering the question, "just what's in this set, exactly?"
 library(dplyr)
 library(ggplot2)
 library(png)
-library(forcats)
 library(RSpectra)
-library(stringr)
 library(Matrix)
 set.seed(100)
-dim_side <- 50
 ```
 
-```{r data_in, echo = FALSE}
-manifest <- list.files(path = "../data/revision_2", full.names = TRUE)
+```{r parameters}
+leaf_img_side_length <- 80
+training_set_folder <- "revision_2"
 ```
 
-What's the most common size of image?
 
-```{r sample_image_dimensions}
-output <- data.frame(x = c(), y = c())
-for (path in manifest) {
-  d <- dim(readPNG(path))
-  row <- data.frame(x = d[[1]], y = d[[2]])
-  output <- bind_rows(output, row)
-  #dimensions = c(dimensions, paste(d, collapse = " ")) 
-}
-plot(output)
+Standardize the sizes of the photos from the training set.
+
+```{r resize_photos}
+command = paste0(getwd(), "/../scripts/resize_images.bat ", leaf_img_side_length)
+shell(command)
 ```
-How on earth can I extract the pixel data that I'm looking for?
-Trying to get a greyscale value for each pixel that's between 0 and 1.
-Let's convert the pixel matrix to a vector by row. 
-Also make sure that each row is appended to themselves in the correct way.
 
-Cool, now we've got photos of the same size and color type.
+Assemble the data matrix, with each row being the pixel data from a single photo.
 
-```{r assemble_matrix}
-manifest <- list.files(path = "../data/revision_2", full.names = TRUE)
-data_mat <- matrix(nrow = length(manifest), ncol = dim_side^2)
-data_mat <- as(data_mat, "dgCMatrix")
+```{r assemble_matrix, echo = FALSE}
+manifest <- list.files(path = paste0("../data/", training_set_folder), full.names = TRUE)
+
+pixel_matrix <- matrix(nrow = length(manifest), ncol = leaf_img_side_length^2)
+pixel_matrix <- as(pixel_matrix, "dgCMatrix")
 for (i in 1:length(manifest)) {
   photo_data <- readPNG(manifest[[i]])
-  data_mat[i,] <- c(photo_data)
+  pixel_matrix[i,] <- c(photo_data)
   print(i)
 }
-name <- paste0("../data/", dim_side, "x", dim_side, "-photo_assembly-2022-02-27.RDS")
-saveRDS(data_mat, file = name)
-```
-
-Calculate the covariance matrix.
-
-```{r calculate_covariance_matrix}
-mat_1 <- data.frame(matrix(data = 1,nrow=length(manifest), ncol=length(manifest) - 1))
-mat_1 <- sparse.model.matrix(~ ., data = mat_1)
-dim(mat_1)
-```
-
-```{r}
-x_mat <- data_mat - ((mat_1 %*% data_mat) * (1 / dim_side))
-covar_mat <- (t(x_mat) %*% x_mat) * (1/dim_side)
-rm(x_mat)
 rm(photo_data)
-rm(data_mat)
+
+name <- paste0("../data/", leaf_img_side_length, "x", leaf_img_side_length, "-photo_assembly-2022-02-27.RDS")
+saveRDS(pixel_matrix, file = name)
 ```
 
+Generate covariance matrix for leaf photo data.
 
-```{r get_eigenvalues}
-number = 5
-eig_object <- eigs_sym(covar_mat, k = number, which = "LM")
-test <- eig_object$vectors[,1]
+```{r get_covariance_matrix}
+ones_mat <- data.frame(matrix(data = 1,nrow=length(manifest), ncol=length(manifest) - 1))
+ones_mat <- sparse.model.matrix(~ ., data = ones_mat)
+
+intermediate <- pixel_matrix - ((ones_mat %*% pixel_matrix) * (1 / leaf_img_side_length))
+rm(pixel_matrix)
+rm(ones_mat)
+covar_mat <- (t(intermediate) %*% intermediate) * (1 / leaf_img_side_length)
 ```
 
-Anything to analyze in these vectors? Can we represent them as images?
+Get the eigenvectors of covariance matrix associated with the n_values, the principal components of the dataset.
 
-```{r analyze_vectors}
+```{r get_eigenvectors}
+n_values = 5
+eig_object <- eigs_sym(covar_mat, k = n_values, which = "LM")
+```
+
+Save the principal components as images to the hard drive.
+
+```{r vector_to_picture}
 for (i in 1:number) {
   vec <- eig_object$vectors[,i]
-  mat <- (matrix(vec, nrow = 50, ncol = 50) - mean(vec)) / sd(vec)
+  mat <- (matrix(vec, nrow = leaf_img_side_length, ncol = leaf_img_side_length) - mean(vec)) / sd(vec)
   path <- paste0("../data/PC-", i, "-img.png")
   writePNG(mat, target = path)
 }
