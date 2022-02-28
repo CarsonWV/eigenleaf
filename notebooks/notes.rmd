@@ -9,8 +9,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Answering the question, "just what's in this set, exactly?"
-
 ```{r setup, echo=FALSE, warnings=FALSE, include=FALSE}
 library(dplyr)
 library(ggplot2)
@@ -20,16 +18,18 @@ library(Matrix)
 set.seed(100)
 ```
 
+TODO: Edit script to overwrite training set with new data.
+TODO: Get manifest of training set names, compare to original leafsnap set.
+
 ```{r parameters}
 leaf_img_side_length <- 80
 training_set_folder <- "revision_2"
 ```
 
-
 Standardize the sizes of the photos from the training set.
 
 ```{r resize_photos}
-command = paste0(getwd(), "/../scripts/resize_images.bat ", leaf_img_side_length)
+command = paste0(getwd(), "/../utils/resize_images.bat ", leaf_img_side_length)
 shell(command)
 ```
 
@@ -47,13 +47,17 @@ for (i in 1:length(manifest)) {
 }
 rm(photo_data)
 
-name <- paste0("../data/", leaf_img_side_length, "x", leaf_img_side_length, "-photo_assembly-2022-02-27.RDS")
+name <- paste0("../data/pixel_matrix_", leaf_img_side_length, "x", leaf_img_side_length, ".RDS")
 saveRDS(pixel_matrix, file = name)
+rm(pixel_matrix)
 ```
 
 Generate covariance matrix for leaf photo data.
 
 ```{r get_covariance_matrix}
+name <- paste0("../data/pixel_matrix_", leaf_img_side_length, "x", leaf_img_side_length, ".RDS")
+pixel_matrix <- readRDS(name)
+
 ones_mat <- data.frame(matrix(data = 1,nrow=length(manifest), ncol=length(manifest) - 1))
 ones_mat <- sparse.model.matrix(~ ., data = ones_mat)
 
@@ -61,13 +65,21 @@ intermediate <- pixel_matrix - ((ones_mat %*% pixel_matrix) * (1 / leaf_img_side
 rm(pixel_matrix)
 rm(ones_mat)
 covar_mat <- (t(intermediate) %*% intermediate) * (1 / leaf_img_side_length)
+
+name <- paste0("../data/covar_matrix_", leaf_img_side_length, "x", leaf_img_side_length, ".RDS")
+saveRDS(covar_mat, name)
+rm(covar_mat)
 ```
 
 Get the eigenvectors of covariance matrix associated with the n_values, the principal components of the dataset.
 
 ```{r get_eigenvectors}
+name <- paste0("../data/covar_matrix_", leaf_img_side_length, "x", leaf_img_side_length, ".RDS")
+covar_mat <- readRDS(name)
+
 n_values = 5
 eig_object <- eigs_sym(covar_mat, k = n_values, which = "LM")
+rm(covar_mat)
 ```
 
 Save the principal components as images to the hard drive.
@@ -81,3 +93,5 @@ for (i in 1:number) {
 }
 ```
 
+TODO: Get loadings of pixel matrix.
+TODO: Make 2d/3d visualization of PCA.
