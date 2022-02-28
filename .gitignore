@@ -43,4 +43,4 @@ utils/process_photos.bat
 utils/degree_chart.jpg
 legacy/
 writeup/research/
-.html
+writeup/*.html
