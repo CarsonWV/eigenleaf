@@ -18,25 +18,37 @@ library(Matrix)
 set.seed(100)
 ```
 
-TODO: Edit script to overwrite training set with new data.
-TODO: Get manifest of training set names, compare to original leafsnap set.
+TODO: Generate list of files used in training set, right join with original set on names.
 
 ```{r parameters}
-leaf_img_side_length <- 80
-training_set_folder <- "revision_2"
+leaf_img_side_length <- 100
 ```
 
 Standardize the sizes of the photos from the training set.
 
-```{r resize_photos}
-command = paste0(getwd(), "/../utils/resize_images.bat ", leaf_img_side_length)
-shell(command)
+```{r resize_photos} 
+
+source <- paste0(getwd(), "/../data/revision_1")
+destination <- paste0(getwd(), "/../data/", "training_set_", leaf_img_side_length, "x", leaf_img_side_length)
+
+if (dir.exists(destination)) {
+  print("Already exists.")
+} else {
+  create_new_test_set = paste0(getwd(), 
+                               "/../utils/resize_images.bat", " ", 
+                               leaf_img_side_length, " \"", 
+                               source, "\" \"", 
+                               destination, "\"")
+  shell(create_new_test_set)
+}
+
 ```
 
 Assemble the data matrix, with each row being the pixel data from a single photo.
 
 ```{r assemble_matrix, echo = FALSE}
-manifest <- list.files(path = paste0("../data/", training_set_folder), full.names = TRUE)
+destination <- paste0(getwd(), "/../data/", "training_set_", leaf_img_side_length, "x", leaf_img_side_length)
+manifest <- list.files(destination, full.names = TRUE)
 
 pixel_matrix <- matrix(nrow = length(manifest), ncol = leaf_img_side_length^2)
 pixel_matrix <- as(pixel_matrix, "dgCMatrix")
@@ -77,7 +89,7 @@ Get the eigenvectors of covariance matrix associated with the n_values, the prin
 name <- paste0("../data/covar_matrix_", leaf_img_side_length, "x", leaf_img_side_length, ".RDS")
 covar_mat <- readRDS(name)
 
-n_values = 5
+n_values <- 5
 eig_object <- eigs_sym(covar_mat, k = n_values, which = "LM")
 rm(covar_mat)
 ```
@@ -85,7 +97,7 @@ rm(covar_mat)
 Save the principal components as images to the hard drive.
 
 ```{r vector_to_picture}
-for (i in 1:number) {
+for (i in 1:n_values) {
   vec <- eig_object$vectors[,i]
   mat <- (matrix(vec, nrow = leaf_img_side_length, ncol = leaf_img_side_length) - mean(vec)) / sd(vec)
   path <- paste0("../data/PC-", i, "-img.png")
